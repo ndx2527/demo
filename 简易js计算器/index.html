@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>计算器</title>
+  <style type="text/css">
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #333;
+    }
+
+    .box {
+      width: 300px;
+      height: 440px;
+      background-color: yellow;
+      margin: 100px auto;
+    }
+
+    .box h2 {
+      line-height: 80px;
+      height: 80px;
+      background-color: #000000;
+      color: #FFFFFF;
+      text-align: center;
+    }
+
+    .box a {
+      display: block;
+      width: 73px;
+      height: 73px;
+      line-height: 73px;
+      text-align: center;
+      background-color: #111;
+      color: #FFFFFF;
+      border: 1px solid #F0F8FF;
+      float: left;
+      cursor: pointer;
+    }
+
+    .box a:hover {
+      background-color: #333333;
+      color: #FFFF00;
+    }
+
+    .box .sp {
+      width: 148px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h2 id="result">结果</h2>
+    <a class="sp">AC</a>
+    <a class="sp">/</a>
+    <a>7</a>
+    <a>8</a>
+    <a>9</a>
+    <a>X</a>
+
+    <a>4</a>
+    <a>5</a>
+    <a>6</a>
+    <a>-</a>
+
+    <a>1</a>
+    <a>2</a>
+    <a>3</a>
+    <a>+</a>
+
+    <a>0</a>
+    <a>.</a>
+    <a class="sp">=</a>
+
+  </div>
+
+  <script type="text/javascript">
+    window.onload = function () {
+      var a_list = document.getElementsByTagName("a");
+      var result = document.getElementById("result");
+      var fu = "";
+      var num1 = "";
+      var num2 = "";
+      for (var i = 0; i < a_list.length; i++) {
+        a_list[i].onclick = function () {
+          // alert(this.innerHTML);
+          var key_value = this.innerHTML;
+          switch (key_value) {
+            case "+":
+              fu = "+";
+              break;
+            case "-":
+              fu = "-";
+              break;
+            case "X":
+              fu = "X";
+              break;
+            case "/":
+              fu = "/"
+              break;
+            case "=":
+              var n1 = parseFloat(num1);
+              var n2 = parseFloat(num2);
+              switch (fu) {
+                case "+":
+                  result.innerHTML = n1 + n2;
+                  break;
+                case "-":
+                  result.innerHTML = n1 - n2;
+                  break;
+                case "X":
+                  result.innerHTML = n1 * n2;
+                  break;
+                case "/":
+                  result.innerHTML = n1 / n2;
+                  break;
+              }
+              break;
+            case "AC":
+              result.innerHTML = "0";
+              fu = "";
+              num1 = "";
+              num2 = "";
+              break;
+            default:
+              if (fu == "") {
+                num1 = num1 += this.innerHTML;
+                result.innerHTML = num1;
+              } else {
+                num2 = num2 += this.innerHTML;
+                result.innerHTML = num2;
+              }
+              break;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+
+</html>
