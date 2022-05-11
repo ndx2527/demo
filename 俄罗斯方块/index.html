@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>俄罗斯方块</title>
+  <style>
+    .game-tip {
+      position: absolute;
+      z-index: 1;
+      top: 100px;
+      left: 100px;
+      display: none;
+      color: #fff;
+      font-size: 55px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <h3>按 W 旋转， ASD移动, 空格暂停</h3>
+  <span>分数:</span><span id="score"></span>
+  <br>
+  <div class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="game-over" class="game-tip"> 游戏结束 </div>
+    <div id="game-pause" class="game-tip"> 游戏暂停 </div>
+  </div>
+  <script>
+
+    // X 轴上有几个格子
+    const X_MAX = 10;
+
+    // Y 轴上有几个格子
+    const Y_MAX = 20;
+
+    // 格子大小
+    const BLOCK_SIZE = 40;
+
+    // 全部格子的集合
+    const BLOCK_LIST = [];
+
+    // 正在活动的块
+    var ACTIVE_BLOCK = null;
+
+    // 下一个活动的块（待扩展）
+    var NEXT_ACTIVE_BLOCK = null;
+
+    // 分数
+    var SCORE = 0;
+
+    // 显示分数的 dom
+    const SCORE_DOM = document.getElementById("score");
+
+    // 暂停的 dom
+    const PAUSE_DOM = document.getElementById("game-pause");
+
+    // 游戏结束的 dom
+    const OVER_DOM = document.getElementById("game-over");
+
+    // 最顶部的块
+    var TOP_CELL_POISITION = Y_MAX;
+
+    // canvas 两兄弟
+    const CANVAS = document.getElementById("canvas");
+    CANVAS.width = BLOCK_SIZE * X_MAX;
+    CANVAS.height = BLOCK_SIZE * Y_MAX;
+    const CTX = CANVAS.getContext('2d');
+
+    var GAME_STATE = -1; //0 游戏运行状态， 1，游戏暂停， -1游戏结束
+
+    /******************  渲染层  ***********************/
+    // 画背景
+    function drawBG() {
+      CTX.lineWidth = 1;
+      CTX.fillStyle = "#000";
+      CTX.fillRect(0, 0, CANVAS.width, CANVAS.height);
+      CTX.strokeStyle = "#eee";
+
+      // 画横线
+      for (let i = BLOCK_SIZE; i < CANVAS.height; i += BLOCK_SIZE) {
+        CTX.beginPath(); //新建一条path
+        CTX.moveTo(0, i);
+        CTX.lineTo(CANVAS.width, i);
+        CTX.closePath();
+        CTX.stroke(); //绘制路径。
+      }
+
+      // 画竖线
+      for (let i = BLOCK_SIZE; i < CANVAS.width; i += BLOCK_SIZE) {
+        CTX.beginPath(); //新建一条path
+        CTX.moveTo(i, 0);
+        CTX.lineTo(i, CANVAS.height);
+        CTX.closePath();
+        CTX.stroke(); //绘制路径。
+      }
+
+    }
+
+    // 绘制全部格子
+    function drawAllBlock() {
+      for (let i = 0; i < Y_MAX; i++) {
+        for (let j = 0; j < X_MAX; j++) {
+          CTX.lineWidth = 8;
+          let cell = BLOCK_LIST[i][j];
+          if (!cell) {
+            continue
+          }
+          CTX.strokeStyle = cell.color;
+          CTX.strokeRect(cell.x * BLOCK_SIZE + 4, cell.y * BLOCK_SIZE + 4, BLOCK_SIZE - 8, BLOCK_SIZE - 8);
+        }
+      }
+    }
+
+    /*****************  model 层   *********************/
+    // 单元类（就是一个一个的格子）
+    class Cell {
+      // 位置
+      x = 0;
+      y = 0;
+
+      //颜色
+      color = "#000";
+
+      // 单元格的id，区别不同的单元格（谁叫 js 没罚判断对象是否同一个）
+      id = "";
+
+      /**
+       * 构造器
+       * @param 
+       * {Number} x： x轴位置
+       * {Number} y： y轴位置
+       */
+      constructor({ x, y, color }) {
+        this.x = x || 0;
+        this.y = y || 0;
+        this.color = color || "#000";
+        this.id = `${new Date().getTime()}${x}${y}`;//生成唯一 id 瞎写逻辑，不重复就行
+        if (this.y >= 0) {
+          BLOCK_LIST[this.y][this.x] = this;
+        }
+
+      }
+
+      /**
+       * 移动方法
+       * 
+       * @params {String} type: 类型，LEFT、LEFT、DOWN 对应的移动的方向
+       * 
+       * @returns 返回移动结果坐标
+       */
+      getMovePositionByType(type) {
+        let position = {
+          x: this.x,
+          y: this.y
+        }
+        switch (type) {
+          case "LEFT":
+            position.x -= 1;
+            break;
+          case "RIGHT":
+            position.x += 1;
+            break;
+          case "DOWN":
+            position.y += 1
+            break;
+        }
+
+        return position;
+      }
+
+      /**
+       * 设定位置
+       * @params { int } x: x坐标
+       * @params { int } y: Y坐标
+       */
+      setCellPoisition({ x, y }) {
+        // 记住上一次位置
+        let beforX = this.x;
+        let beforY = this.y;
+
+        // 如果上一个格子没有被征用就回收
+        if (beforY >= 0 && BLOCK_LIST[beforY][beforX].id == this.id) {
+          BLOCK_LIST[beforY][beforX] = null;
+        }
+
+        if (y >= 0) {
+          BLOCK_LIST[y][x] = this;
+        }
+
+        // 赋值给 x y
+        this.x = x;
+        this.y = y;
+      }
+    }
+
+    // 块类。 单元格的集合状态
+    class Block {
+
+      // 身体
+      body = [];
+
+      // 旋转中心
+      centerPoint = -1; // 指旋转不变的点
+
+      //各个角度的样子
+      rotationList = [];
+
+      // 旋转角度
+      rotate = -1; // 指旋转到了 rotationList 第几个数组
+
+      // 下落定时器
+      downTimer = null;
+
+      // 下落时间
+      downSpeed = 500;
+
+      // 是否停止活动， true是
+      stopActive = false;
+
+      // 初始化 body
+      initBody(x, y) {
+        if (this.rotate == -1 || !this.rotationList.length) {
+          return
+        }
+        // 如果有旋转中心，就用旋转中心，没有就用第一个。即0
+        let contrastPoint = this.centerPoint != -1 ? this.centerPoint : 0;
+        let centerPoisition = this.rotationList[this.rotate][contrastPoint];
+
+        for (let i = 0; i < this.rotationList[this.rotate].length; i++) {
+          let position = this.rotationList[this.rotate][i];
+          this.body.push(
+            new Cell({
+              x: x + (position.x - centerPoisition.x),
+              y: y + (position.y - centerPoisition.y),
+              color: this.color
+            })
+          )
+        }
+        // 启用下落方法
+        this.down();
+      }
+
+      //旋转方法
+      rotationBlock() {
+        // 没有旋转中心的不转
+        if (this.centerPoint == -1) {
+          return
+        }
+
+        // 撞了就打断，不转了
+        if (this.isCollision("ROTATION")) {
+          return
+        }
+
+        // 偏移值
+        this.body.forEach((e, index) => {
+          e.setCellPoisition(this.getOffsetPosition(index))
+        })
+        this.rotate += 1;
+        if (this.rotate == this.rotationList.length) {
+          this.rotate = 0;
+        }
+      }
+
+      // 下落方法
+      down() {
+        this.downTimer = setInterval(() => {
+          // 是否已经停止活动
+          if (this.stopActive) {
+            clearInterval(this.downTimer);
+            return
+          }
+          // 游戏运行状态才可以移动 
+          if (GAME_STATE == 0) {
+            this.move("DOWN");
+          }
+
+        }, this.downSpeed)
+      }
+
+      // 移动方法
+      move(type) {
+
+        // 撞了就打断，不动了
+        if (this.isCollision(type)) {
+          return
+        }
+
+        // 移动
+        for (let i = 0, len = this.body.length; i < len; i++) {
+          // 拿到移动的下一个坐标
+          let position = this.body[i].getMovePositionByType(type);
+          // 设进去
+          this.body[i].setCellPoisition(position);
+        }
+      }
+
+      /**
+       * 移动碰撞检测方法
+       * 
+       * @arg type: 移动类型
+       * @returns true 撞了
+       */
+      isCollision(type) {
+        // 碰撞检测
+        let result = false;
+        for (let i = 0, len = this.body.length; i < len; i++) {
+          let position = {};
+          // 移动类型
+          if (type != "ROTATION") {
+            // 拿到移动的下一个坐标
+            position = this.body[i].getMovePositionByType(type);
+          } else {
+            // 旋转类型
+            position = this.getOffsetPosition(i);
+          }
+
+          // 边界判断
+          // 看看x有没有撞
+          if (position.x < 0 || position.x >= X_MAX) {
+            result = true
+            break;
+          }
+          // 看看y有么有撞
+          if (position.y >= Y_MAX) {
+            result = true
+            break;
+          }
+          // 如果y为负数，不用验证，直接过
+          if (position.y < 0) {
+            break;
+          }
+          // 看看有没有碰到格子
+          // 排除自身碰撞 !this.body.some( e => e.id == targetBlock.id) 只要有任意一个是自己body里面的cell就不算碰撞
+          let targetBlock = BLOCK_LIST[position.y][position.x];
+          if (targetBlock && !this.body.some(e => e.id == targetBlock.id)) {
+            result = true
+            break;
+          }
+        }
+
+        // 如果是下落的移动方式且也碰到了东西，我们认为这个块已经结束使命了。
+        if (type == "DOWN" && result) {
+          this.stopActive = true;
+        }
+        return result
+      }
+
+      // 偏移值计算方法
+      getOffsetPosition(cellIndex) {
+        let index = this.rotate + 1;
+        if (this.rotate == this.rotationList.length - 1) {
+          index = 0;
+        }
+        let targetPoisition = this.rotationList[index][cellIndex];
+        let centerPoisition = this.rotationList[index][this.centerPoint];
+        return {
+          x: this.body[this.centerPoint].x + (targetPoisition.x - centerPoisition.x),
+          y: this.body[this.centerPoint].y + (targetPoisition.y - centerPoisition.y)
+        };
+      }
+
+      // 获取最顶端格子的位置
+      getTopCellY() {
+        return Math.min(...this.body.map(e => e.y))
+      }
+    }
+
+    // 田字格
+    class BigBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#0FF";
+        this.rotate = 0;
+        this.rotationList = [
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+
+    }
+
+    // 一字格子
+    class LongBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#FF7F00";
+        this.rotate = 0;
+        this.centerPoint = 1;
+        this.rotationList = [
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
+          [{ x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+
+    }
+
+    // L形格子
+    class LBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#00FFFF";
+        this.centerPoint = 2; // 第几个块是旋转中心
+        this.rotate = 0; // 当前旋转角度
+        this.rotationList = [
+          [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], // 原来形状
+          [{ x: 2, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }], // 旋转 90
+          [{ x: 2, y: 2 }, { x: 2, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 1 }], // 旋转 180
+          [{ x: 0, y: 2 }, { x: 1, y: 2 }, { x: 1, y: 1 }, { x: 1, y: 0 }]  // 旋转 270
+        ]
+        this.initBody(x || 4, y || -1); // 初始化位置（就是你希望他一开始在哪里出现）
+      }
+    }
+
+    // 反L形格子
+    class RLBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#00F";
+        this.centerPoint = 1;
+        this.rotate = 0;
+        this.rotationList = [
+          [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 0 }],
+          [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
+          [{ x: 2, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+          [{ x: 1, y: 2 }, { x: 1, y: 1 }, { x: 1, y: 0 }, { x: 0, y: 0 }]
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+    }
+
+    // Z格子
+    class ZBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#0F0";
+        this.centerPoint = 2;
+        this.rotate = 0;
+        this.rotationList = [
+          [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+          [{ x: 2, y: 0 }, { x: 2, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+          [{ x: 2, y: 2 }, { x: 1, y: 2 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+          [{ x: 0, y: 2 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 0 }]
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+    }
+
+    // 反Z格子
+    class RZBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#8B00FF";
+        this.centerPoint = 1;
+        this.rotate = 0;
+        this.rotationList = [
+          [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
+          [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }],
+          [{ x: 2, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 0, y: 2 }],
+          [{ x: 1, y: 2 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: 0, y: 0 }]
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+    }
+
+    // T格子
+    class TBlock extends Block {
+
+      /**
+       * 构造器
+       */
+      constructor({ x, y, color }) {
+        super()
+        this.color = color || "#F00";
+        this.centerPoint = 2;
+        this.rotate = 0;
+        this.rotationList = [
+          [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+          [{ x: 2, y: 1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+          [{ x: 1, y: 2 }, { x: 2, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+          [{ x: 0, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 1 }, { x: 1, y: 0 }]
+        ]
+        this.initBody(x || 4, y || -1);
+      }
+    }
+
+
+    /******************  控制层  *************************/
+    document.onkeydown = function (event) {
+      let e = event || window.event;
+      switch (e.keyCode) {
+        //W
+        case 87:
+          ACTIVE_BLOCK.rotationBlock();
+          break;
+        //S
+        case 83:
+          ACTIVE_BLOCK.move("DOWN");
+          break;
+        //A
+        case 65:
+          ACTIVE_BLOCK.move("LEFT");
+          break;
+        //D
+        case 68:
+          ACTIVE_BLOCK.move("RIGHT");
+          break;
+        // 空格
+        case 32:
+          pause();
+          break;
+      }
+    };
+
+    // 初始化 BODY_LIST
+    function initBodyList() {
+      // 初始化 BLOCK_LIST
+      for (let i = 0; i < Y_MAX; i++) {
+        let list = []
+        for (let j = 0; j < X_MAX; j++) {
+          list.push(null)
+        }
+        BLOCK_LIST.push(list)
+      }
+    }
+
+    // 算分方法
+    function computeScore() {
+      let clearRowIndexList = [];
+      for (let i = Y_MAX - 1; i >= 0; i--) {
+        // 如果每一行都有格子，消除这一行，并把上面的格子往下移动，并+10分
+        if (BLOCK_LIST[i].every(e => e)) {
+          SCORE += 10;
+          // 记录需要消除的行
+          clearRowIndexList.unshift(i);
+        }
+      }
+
+      // 消除行
+      clearRow(clearRowIndexList)
+      SCORE_DOM.innerText = SCORE;
+    }
+
+    // 消除行
+    // 消除 index 行， 并把 index 行上面的全部格子下移
+    function clearRow(list) {
+      while (list.length) {
+        let index = list.pop();
+        // 清空
+        for (let i = 0; i < X_MAX; i++) {
+          BLOCK_LIST[index][i] = null;
+        }
+        // 把上面的行移动下来
+        for (let i = index - 1; i >= 0; i--) {
+          BLOCK_LIST[i].forEach(e => {
+            if (e) {
+              let poisition = e.getMovePositionByType("DOWN");
+              e.setCellPoisition(poisition);
+            }
+          });
+        }
+
+        // 把剩余的index += 1
+        for (let i = 0, len = list.length; i < len; i++) {
+          list[i] += 1;
+        }
+      }
+
+    }
+
+    // 生成随机格子
+    function getRandomBlock() {
+      let block = null;
+      let randomType = Math.floor(Math.random() * 7);
+      switch (randomType) {
+        case 0: // z格子
+          block = new ZBlock({});
+          break;
+        case 1: // 田字格子
+          block = new BigBlock({});
+          break;
+        case 2: // 一字格子
+          block = new LongBlock({});
+          break;
+        case 3: // L格子
+          block = new LBlock({});
+          break;
+        case 4: // 反L格子
+          block = new RLBlock({});
+          break;
+        case 5: // 反Z格子
+          block = new RZBlock({});
+          break;
+        case 6: // T格子
+          block = new TBlock({});
+          break;
+      }
+      return block;
+    }
+
+    // 设置顶的位置
+    function setTopCellPoisition() {
+      if (ACTIVE_BLOCK.getTopCellY() < TOP_CELL_POISITION) {
+        TOP_CELL_POISITION = ACTIVE_BLOCK.getTopCellY();
+      }
+    };
+
+    // 游戏结束
+    function gameOver() {
+      if (TOP_CELL_POISITION <= 0) {
+        GAME_STATE = -1;
+        OVER_DOM.style.display = "block";
+      }
+    }
+
+    // 游戏暂停
+    function pause() {
+      if (GAME_STATE == 1) {
+        // 开始
+        GAME_STATE = 0;
+        PAUSE_DOM.style.display = "none";
+      } else {
+        // 暂停
+        GAME_STATE = 1;
+        PAUSE_DOM.style.display = "block";
+
+      }
+    }
+
+    /********************  引用的地方  **********************/
+    // 运行
+    function run() {
+
+      // 使用 AnimationFrame 刷新
+      window.requestAnimationFrame(run);
+      // 游戏非暂停运行阶段都停止渲染
+      if (GAME_STATE != 0) {
+        return
+      }
+      // 绘制背景
+      drawBG();
+
+      // 绘制二维表格
+      drawAllBlock();
+
+      // 如果活动格子停止活动了，就开始算分和创建新的格子
+      if (ACTIVE_BLOCK.stopActive) {
+        // 算分
+        computeScore();
+        // 更新最顶的格子
+        setTopCellPoisition()
+        // 是否游戏结束
+        gameOver();
+        // 创建格子
+        ACTIVE_BLOCK = getRandomBlock();
+      }
+
+    }
+
+    // 启动方法
+    function start() {
+      // 设置为运行状态
+      GAME_STATE = 0;
+      OVER_DOM.style.display = "none";
+      // 初始化二维数组
+      initBodyList();
+      // 创建正在活动的格子
+      ACTIVE_BLOCK = getRandomBlock();
+      // 启动渲染
+      window.requestAnimationFrame(run);
+    }
+
+    // 启动
+    start();
+  </script>
+</body>
+
+</html>
