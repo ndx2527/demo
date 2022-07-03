@@ -1,0 +1,77 @@
+* {
+    margin: 0px;
+    padding: 0px;
+}
+
+.game {
+    position: relative;
+    width: 750px;
+    height: 600px;
+    margin: 0px auto;
+}
+
+.ground {
+    position: relative;
+    width: 750px;
+    height: 550px;
+    background: url("./images/bg_canvas.png");
+    cursor: url("./images/hammer.png"), auto;
+}
+
+.hole {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: url("./images/bg_hole.png");
+    z-index: 100;
+}
+
+.mouse {
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    overflow: hidden;
+    left: 0px;
+    top: 20px;
+    background-position: 50% 50%;
+}
+@keyframes moveTop {
+    0% {
+        top: 70px;
+    }
+    100% {
+        top: 20px;
+    }
+}
+
+.mask {
+    position: absolute;
+    width: 140px;
+    height: 125px;
+    overflow: hidden;
+}
+
+.score {
+    position: absolute;
+    left: 420px;
+    top: 180px;
+    width: 300px;
+    height: 30px;
+    font-size: 0px;
+}
+.score img {
+    display: inline-block;
+    height: 30px;
+}
+.score span {
+    display: inline-block;
+    width: 200px;
+    height: 30px;
+    color: white;
+    line-height: 30px;
+    font-size: 24px;
+    vertical-align: top;
+    margin-left: 10px;
+}
+
+
